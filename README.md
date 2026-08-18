@@ -59,7 +59,7 @@ docker compose down -v     # stop and delete volumes too
 dotnet run --project src/ChatMemory.Api
 ```
 
-The API listens on the port printed at startup (e.g. `http://localhost:5000`).
+The API listens on `http://localhost:5210` (see `Properties/launchSettings.json`).
 Configuration lives in `src/ChatMemory.Api/appsettings.json` and already points
 at the compose services (`localhost:27017`, `localhost:11434`).
 
@@ -67,16 +67,16 @@ at the compose services (`localhost:27017`, `localhost:11434`).
 
 ```bash
 # 1. Create a conversation
-curl -s -X POST http://localhost:5000/api/conversations \
+curl -s -X POST http://localhost:5210/api/conversations \
   -H "Content-Type: application/json" -d '{"title":"Trip planning"}'
 
 # 2. Chat (use the returned id)
-curl -s -X POST http://localhost:5000/api/conversations/<id>/messages \
+curl -s -X POST http://localhost:5210/api/conversations/<id>/messages \
   -H "Content-Type: application/json" \
   -d '{"text":"I am planning a 3-day trip to Rome in October. Suggestions?"}'
 
 # 3. Inspect the persisted transcript
-curl -s http://localhost:5000/api/conversations/<id>
+curl -s http://localhost:5210/api/conversations/<id>
 ```
 
 Each reply includes `messagesInHistory`, `messagesSentToModel` and a
