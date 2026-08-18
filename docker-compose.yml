@@ -1,0 +1,42 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: chatmemory-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: chatmemory-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: pulls the chat model into the ollama volume, then exits.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: chatmemory-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "llama3.2:3b"]
+    restart: "no"
+
+volumes:
+  mongo-data:
+  ollama-data:

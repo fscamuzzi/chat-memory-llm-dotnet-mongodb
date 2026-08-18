@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Chat reduction (IChatReducer) is experimental in Microsoft.Extensions.AI. -->
+    <NoWarn>$(NoWarn);MEAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.11.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.30" />
+  </ItemGroup>
+
+</Project>
