@@ -20,6 +20,7 @@ builder.Services.AddOptions<ChatMemoryOptions>()
     .Bind(builder.Configuration.GetSection(ChatMemoryOptions.Section))
     .ValidateOnStart();
 builder.Services.AddSingleton<IValidateOptions<ChatMemoryOptions>, ChatMemoryOptionsValidator>();
+builder.Services.AddSingleton<IValidateOptions<OllamaOptions>, OllamaOptionsValidator>();
 
 // MongoDB: conversations, immutable turns, and the unique turn-sequence index.
 builder.Services.AddSingleton<IMongoDatabase>(sp =>
@@ -32,11 +33,11 @@ builder.Services.AddSingleton<IConversationRepository, MongoConversationReposito
 // Hosted services start before the server accepts requests: the index exists before the first turn.
 builder.Services.AddHostedService<ConversationIndexInitializer>();
 
-// Ollama as the IChatClient for answers and for summaries.
+// Ollama as the IChatClient for answers and for summaries, with the configured call timeout.
 builder.Services.AddChatClient(sp =>
 {
     var ollama = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
-    return new OllamaApiClient(new Uri(ollama.Endpoint), ollama.Model);
+    return new OllamaApiClient(OllamaHttpClientFactory.Create(ollama), ollama.Model);
 });
 
 builder.Services.AddSingleton<ConversationMemoryReducer>();

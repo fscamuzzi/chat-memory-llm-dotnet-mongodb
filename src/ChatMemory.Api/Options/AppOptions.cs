@@ -18,6 +18,12 @@ public sealed class OllamaOptions
     public string Endpoint { get; set; } = "http://localhost:11434";
 
     public string Model { get; set; } = "llama3.2:3b";
+
+    /// <summary>
+    /// Longest wait for one model call, in seconds. Range 1..3600.
+    /// Raise it when Ollama runs on CPU only, for example in Docker on macOS.
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = 100;
 }
 
 public sealed class ChatMemoryOptions

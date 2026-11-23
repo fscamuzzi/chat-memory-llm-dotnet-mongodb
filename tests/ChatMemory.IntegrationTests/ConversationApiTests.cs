@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text.Json;
 using ChatMemory.Api.Contracts;
 using ChatMemory.Api.Data;
@@ -9,7 +11,8 @@ using MongoDB.Driver;
 
 namespace ChatMemory.IntegrationTests;
 
-// The real API host over HTTP against a real MongoDB. Only the chat model is a deterministic fake.
+// The real API host over HTTP against a real MongoDB. Only the chat model is a deterministic fake;
+// the timeout test keeps the real Ollama client against a silent local endpoint.
 [Collection(MongoCollection.Name)]
 public class ConversationApiTests(MongoFixture mongo) : IAsyncLifetime
 {
@@ -331,6 +334,35 @@ public class ConversationApiTests(MongoFixture mongo) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
 
+        var transcript = await GetTranscriptAsync(client, id);
+        Assert.Equal(0, transcript.StoredMessageCount);
+        Assert.Empty(transcript.Messages);
+    }
+
+    [Fact]
+    public async Task SilentOllama_FailsAfterTheConfiguredTimeout_AndStoresNoTurn()
+    {
+        // 1) An endpoint that accepts the connection and never answers, like a model that is too slow.
+        using var silentOllama = new TcpListener(IPAddress.Loopback, 0);
+        silentOllama.Start();
+        var port = ((IPEndPoint)silentOllama.LocalEndpoint).Port;
+        await using var api = new MongoApiFactory(mongo, databaseName, chatClient: null, new()
+        {
+            ["Ollama:Endpoint"] = $"http://127.0.0.1:{port}",
+            ["Ollama:TimeoutSeconds"] = "1",
+        });
+        using var client = api.CreateClient();
+        var id = await CreateConversationAsync(client);
+
+        // 2) The real Ollama client must give up near the configured second, far below the 100-second default.
+        var stopwatch = Stopwatch.StartNew();
+        var response = await PostMessageAsync(client, id, "Hello");
+        stopwatch.Stop();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.InRange(stopwatch.Elapsed, TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(30));
+
+        // 3) A timed-out model call stores nothing.
         var transcript = await GetTranscriptAsync(client, id);
         Assert.Equal(0, transcript.StoredMessageCount);
         Assert.Empty(transcript.Messages);

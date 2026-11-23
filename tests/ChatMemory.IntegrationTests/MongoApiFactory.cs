@@ -38,14 +38,14 @@ public sealed class MongoCollection : ICollectionFixture<MongoFixture>
 }
 
 // Starts the real API host against the test MongoDB database.
-// Only the IChatClient is replaced: Ollama is never needed.
+// The IChatClient is replaced, so Ollama is not needed. A null chat client keeps the real Ollama client.
 public sealed class MongoApiFactory(
     MongoFixture mongo,
     string databaseName,
-    DeterministicChatClient chatClient,
+    DeterministicChatClient? chatClient,
     Dictionary<string, string?>? settings = null) : WebApplicationFactory<Program>
 {
-    // Point the host at the test database and replace the chat client.
+    // Point the host at the test database and replace the chat client when one is given.
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Added last, so these values win over appsettings.json.
@@ -55,6 +55,9 @@ public sealed class MongoApiFactory(
                 ["Mongo:ConnectionString"] = mongo.ConnectionString,
                 ["Mongo:Database"] = databaseName,
             }));
+
+        if (chatClient is null)
+            return;
 
         builder.ConfigureTestServices(services =>
         {

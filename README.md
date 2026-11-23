@@ -79,6 +79,33 @@ If Docker reports `port is already allocated`, another process uses `27018` or
 `11434`. Stop that process, or change the left side of the port mapping in
 `docker-compose.yml` and the matching value in `src/ChatMemory.Api/appsettings.json`.
 
+### Ollama in Docker on macOS
+
+Docker on macOS gives containers no GPU, so the `ollama` service runs on the CPU.
+It works, but it is slow. On a loaded Apple Silicon Mac, `llama3.2:3b` produced
+about 0.5 tokens per second, and a normal answer did not finish within the default
+100-second timeout: the API returned `500`.
+
+Two ways to handle it:
+
+- Raise the timeout of the model call (`Ollama:TimeoutSeconds`, see
+  [Memory strategies](#memory-strategies)):
+
+  ```bash
+  Ollama__TimeoutSeconds=600 dotnet run --project src/ChatMemory.Api
+  ```
+
+- Or use the native Ollama app, which uses the GPU. Start only MongoDB with Docker
+  and pull the model with the native app:
+
+  ```bash
+  docker compose up -d mongodb
+  ```
+
+  ```bash
+  ollama pull llama3.2:3b
+  ```
+
 ## 2. Start the API
 
 ```bash
@@ -206,6 +233,16 @@ Other settings in the `ChatMemory` section:
 | `MaxConcurrencyRetries`  | 1       | 0 to 3 |
 | `SystemPrompt`           | (text)  | not blank |
 
+Settings in the `Ollama` section:
+
+| Setting          | Default                  | Rule |
+| ---------------- | ------------------------ | ---- |
+| `Endpoint`       | `http://localhost:11434` | none |
+| `Model`          | `llama3.2:3b`            | none |
+| `TimeoutSeconds` | 100                      | 1 to 3600 |
+
+`TimeoutSeconds` is the longest wait for one model call, an answer or a summary.
+
 An invalid value stops the API at startup.
 
 ## Errors
@@ -220,8 +257,8 @@ The errors that the API handlers produce have the body `{ "message": "…" }`:
 
 Two cases do not have this body. ASP.NET Core rejects a missing or malformed JSON
 body, or a non-numeric `limit`, with its own `400` before the handler runs. A
-failed model call (for example Ollama is not running) returns `500`, and no
-turn is stored.
+failed model call returns `500`, and no turn is stored. Two examples: Ollama is
+not running, or the call takes longer than `Ollama:TimeoutSeconds`.
 
 ## Concurrent turns
 
@@ -255,7 +292,8 @@ dotnet test tests/ChatMemory.Tests
 
 Integration tests need a running Docker. Testcontainers starts a temporary
 `mongo:7` container; `WebApplicationFactory` starts the real API over it. Ollama
-is replaced by a deterministic `IChatClient`:
+is replaced by a deterministic `IChatClient`. One test keeps the real Ollama
+client and points it at a local endpoint that never answers, to prove the timeout:
 
 ```bash
 dotnet test tests/ChatMemory.IntegrationTests
@@ -292,6 +330,7 @@ src/ChatMemory.Api/
   Endpoints/ConversationEndpoints.cs     # Minimal API handlers with typed results
   Services/ChatService.cs                # load state → reduce → ask → insert turn, with retry
   Services/ConversationMemoryReducer.cs  # strategies and the durable summary checkpoint
+  Services/OllamaHttpClientFactory.cs    # HttpClient with the configured model-call timeout
   Data/ConversationRepository.cs         # LINQ reads, insert-only writes
   Data/ConversationIndexInitializer.cs   # unique (ConversationId, Sequence) index
   Models/ · Contracts/ · Options/
