@@ -9,10 +9,19 @@ using OllamaSharp;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Configure<MongoOptions>(builder.Configuration.GetSection(MongoOptions.Section));
-builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection(OllamaOptions.Section));
-builder.Services.Configure<ChatMemoryOptions>(builder.Configuration.GetSection(ChatMemoryOptions.Section));
+// Options: bound once and checked at startup, so a wrong value stops the host.
+builder.Services.AddOptions<MongoOptions>()
+    .Bind(builder.Configuration.GetSection(MongoOptions.Section))
+    .ValidateOnStart();
+builder.Services.AddOptions<OllamaOptions>()
+    .Bind(builder.Configuration.GetSection(OllamaOptions.Section))
+    .ValidateOnStart();
+builder.Services.AddOptions<ChatMemoryOptions>()
+    .Bind(builder.Configuration.GetSection(ChatMemoryOptions.Section))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<ChatMemoryOptions>, ChatMemoryOptionsValidator>();
 
+// MongoDB: conversations, immutable turns, and the unique turn-sequence index.
 builder.Services.AddSingleton<IMongoDatabase>(sp =>
 {
     var mongo = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
@@ -20,18 +29,24 @@ builder.Services.AddSingleton<IMongoDatabase>(sp =>
 });
 builder.Services.AddSingleton<IConversationRepository, MongoConversationRepository>();
 
+// Hosted services start before the server accepts requests: the index exists before the first turn.
+builder.Services.AddHostedService<ConversationIndexInitializer>();
+
+// Ollama as the IChatClient for answers and for summaries.
 builder.Services.AddChatClient(sp =>
 {
     var ollama = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
     return new OllamaApiClient(new Uri(ollama.Endpoint), ollama.Model);
 });
 
-builder.Services.AddSingleton<ChatReducerFactory>();
+builder.Services.AddSingleton<ConversationMemoryReducer>();
 builder.Services.AddSingleton<ChatService>();
 
 var app = builder.Build();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapConversationEndpoints();
 
 app.Run();
+
+// Lets WebApplicationFactory<Program> in the integration tests start this host.
+public partial class Program;

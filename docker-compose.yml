@@ -3,7 +3,8 @@ services:
     image: mongo:7
     container_name: chatmemory-mongodb
     ports:
-      - "27017:27017"
+      # Host port 27018, so a MongoDB installed on the host (27017) is never used by mistake.
+      - "27018:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:

@@ -1,17 +1,35 @@
-### Health
-GET http://localhost:5210/api/health
+@baseUrl = http://localhost:5210
+# Replace with the "id" returned by request 1.
+@id = 000000000000000000000000
 
-### 1. Create a conversation
-POST http://localhost:5210/api/conversations
+### Health -> { "status": "ok" }
+GET {{baseUrl}}/api/health
+
+### 1. Create a conversation -> 201 { "id", "title" }
+POST {{baseUrl}}/api/conversations
 Content-Type: application/json
 
 { "title": "Trip planning" }
 
-### 2. Send a message (replace {{id}} with the Id returned above)
-POST http://localhost:5210/api/conversations/{{id}}/messages
+### 2. Send a message
+### -> 200 { "reply", "storedMessageCount", "messagesSentToModel", "promptPreview", "summaryRefreshed" }
+POST {{baseUrl}}/api/conversations/{{id}}/messages
 Content-Type: application/json
 
 { "text": "I'm planning a 3-day trip to Rome in October. Any suggestions?" }
 
-### 3. Inspect the persisted history
-GET http://localhost:5210/api/conversations/{{id}}
+### 3. Newest transcript page. "limit" counts turns (default 20, maximum 100).
+### -> 200 { "id", "title", "createdAt", "updatedAt", "messages", "storedMessageCount", "nextBeforeSequence" }
+GET {{baseUrl}}/api/conversations/{{id}}?limit=2
+
+### 4. Older page. Use "nextBeforeSequence" from the previous response. The cursor is exclusive.
+GET {{baseUrl}}/api/conversations/{{id}}?limit=2&beforeSequence=4
+
+### 5. Blank text -> 400 { "message" }
+POST {{baseUrl}}/api/conversations/{{id}}/messages
+Content-Type: application/json
+
+{ "text": "   " }
+
+### 6. Unknown conversation -> 404 { "message" }
+GET {{baseUrl}}/api/conversations/68a0000000000000000000aa
