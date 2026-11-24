@@ -21,7 +21,16 @@ public sealed class ConversationMemoryReducer(
     IConversationRepository repository,
     IOptions<ChatMemoryOptions> options)
 {
+    // Added to the official summarization prompt. A small model drops exact details and tends to
+    // answer the user again; these two lines keep the facts and ask for the summary alone.
+    public const string SummaryRules =
+        "Keep every name, date, time, number and place that the user gave.\n" +
+        "Write only the summary. Do not continue the conversation and do not ask questions.";
+
     private const string PreviousSummaryPrefix = "Previous summary: ";
+
+    // The summarization model receives the instruction as a final user message.
+    private readonly SummaryRequestChatClient summaryClient = new(chatClient);
 
     // A prompt message together with the sequence of the turn it belongs to.
     private sealed record SourcedMessage(ChatMessage Message, long Sequence);
@@ -86,7 +95,8 @@ public sealed class ConversationMemoryReducer(
             : [new ChatMessage(ChatRole.Assistant, PreviousSummaryPrefix + checkpoint.SummaryText)];
         List<ChatMessage> input = [system, .. previousSummary, .. tail.Select(m => m.Message)];
         var reducer = new SummarizingChatReducer(
-            chatClient, options.Value.TargetMessageCount, options.Value.SummarizationThreshold);
+            summaryClient, options.Value.TargetMessageCount, options.Value.SummarizationThreshold);
+        reducer.SummarizationPrompt += "\n\n" + SummaryRules;
         var reduced = (await reducer.ReduceAsync(input, ct)).ToList();
 
         // 4) The summary is the only output message that was not in the input.

@@ -222,6 +222,26 @@ the new user message) are more than `TargetMessageCount + SummarizationThreshold
 The cut is always placed before a user message, so a user/assistant pair is
 never split.
 
+### The summary request
+
+The official `SummarizingChatReducer` ends its request with a system message that
+carries the instruction. With `llama3.2` in Ollama that request does not produce a
+summary. The chat template puts system text at the top of the prompt and leaves the
+last assistant message open, so the model continues that old answer. In 20 runs of
+the same request the reply started with the word `assistant` every time, and it kept
+3.5 of 8 test facts on average.
+
+Two things fix it:
+
+- `SummaryRequestChatClient` wraps the chat client that the reducer uses and sends
+  the instruction as the final user message.
+- `ConversationMemoryReducer.SummaryRules` adds two lines to the official prompt:
+  keep every name, date, time, number and place, and write only the summary.
+
+With this shape, 20 runs of the same request kept all 8 facts. The numbers come from
+one English test conversation with `llama3.2` (3B). The summary is still a model
+output: read `promptPreview` when the answers get worse.
+
 Other settings in the `ChatMemory` section:
 
 | Setting                  | Default | Rule |
@@ -330,6 +350,7 @@ src/ChatMemory.Api/
   Endpoints/ConversationEndpoints.cs     # Minimal API handlers with typed results
   Services/ChatService.cs                # load state → reduce → ask → insert turn, with retry
   Services/ConversationMemoryReducer.cs  # strategies and the durable summary checkpoint
+  Services/SummaryRequestChatClient.cs   # sends the summary instruction as the final user message
   Services/OllamaHttpClientFactory.cs    # HttpClient with the configured model-call timeout
   Data/ConversationRepository.cs         # LINQ reads, insert-only writes
   Data/ConversationIndexInitializer.cs   # unique (ConversationId, Sequence) index

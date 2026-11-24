@@ -196,6 +196,28 @@ public class ChatReducerTests
     }
 
     [Fact]
+    public async Task Summarizing_SummaryRequest_EndsWithTheInstructionAsAUserMessage()
+    {
+        var (repository, id) = await SeedAsync(turns: 8);
+        var chatClient = new FakeChatClient();
+        var reducer = BuildReducer(chatClient, repository, new());
+
+        await ReduceAsync(reducer, repository, id, "Question 9");
+
+        // 1) No system message: a model whose template ignores a trailing system message
+        //    would continue the last answer instead of writing a summary.
+        var summaryCall = Assert.Single(chatClient.SummaryCalls);
+        Assert.DoesNotContain(summaryCall, message => message.Role == ChatRole.System);
+
+        // 2) The instruction is the final user message: the official prompt, then the extra rules.
+        var instruction = summaryCall[^1];
+        Assert.Equal(ChatRole.User, instruction.Role);
+        Assert.StartsWith("**Generate a clear and complete summary", instruction.Text);
+        Assert.EndsWith(ConversationMemoryReducer.SummaryRules, instruction.Text);
+        Assert.Contains("Keep every name, date, time, number and place", ConversationMemoryReducer.SummaryRules);
+    }
+
+    [Fact]
     public async Task Summarizing_WithCheckpoint_RefreshesOnlyWhenTheTailExceedsTargetPlusThreshold()
     {
         var checkpoint = new ReducerCheckpoint { SummaryText = "Stored summary", SummarizedThroughSequence = 3 };

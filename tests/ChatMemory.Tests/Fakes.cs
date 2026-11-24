@@ -1,12 +1,13 @@
 using ChatMemory.Api.Data;
 using ChatMemory.Api.Models;
+using ChatMemory.Api.Services;
 using Microsoft.Extensions.AI;
 using MongoDB.Bson;
 
 namespace ChatMemory.Tests;
 
 // Scripted IChatClient. It records every call and tells answer calls from summary calls.
-// The official SummarizingChatReducer ends its request with a system message; an answer prompt never does.
+// A summary request ends with a user message that closes with the summary rules; an answer prompt never does.
 public sealed class FakeChatClient(string answer = "ok") : IChatClient
 {
     private readonly List<IReadOnlyList<ChatMessage>> calls = [];
@@ -47,9 +48,11 @@ public sealed class FakeChatClient(string answer = "ok") : IChatClient
     {
     }
 
-    // A summary request ends with the system message that carries the summarization prompt.
+    // A summary request ends with the user message that carries the summarization prompt and rules.
     private static bool IsSummaryCall(IReadOnlyList<ChatMessage> messages) =>
-        messages.Count > 0 && messages[^1].Role == ChatRole.System;
+        messages.Count > 0
+        && messages[^1].Role == ChatRole.User
+        && messages[^1].Text.EndsWith(ConversationMemoryReducer.SummaryRules, StringComparison.Ordinal);
 }
 
 // In-memory repository with the same observable behavior as MongoConversationRepository.

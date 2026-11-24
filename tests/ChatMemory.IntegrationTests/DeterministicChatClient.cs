@@ -1,9 +1,10 @@
+using ChatMemory.Api.Services;
 using Microsoft.Extensions.AI;
 
 namespace ChatMemory.IntegrationTests;
 
 // Stands in for Ollama. Replies are a pure function of the request, and every call is recorded.
-// A summary request ends with a system message (the official reducer's shape); an answer prompt never does.
+// A summary request ends with a user message that closes with the summary rules; an answer prompt never does.
 public sealed class DeterministicChatClient : IChatClient
 {
     private readonly object gate = new();
@@ -31,7 +32,8 @@ public sealed class DeterministicChatClient : IChatClient
     {
         IReadOnlyList<ChatMessage> received = messages.ToList();
 
-        if (received[^1].Role == ChatRole.System)
+        if (received[^1].Role == ChatRole.User
+            && received[^1].Text.EndsWith(ConversationMemoryReducer.SummaryRules, StringComparison.Ordinal))
             return Reply($"SUMMARY {Interlocked.Increment(ref summaryCalls)}");
 
         lock (gate)
