@@ -6,8 +6,8 @@ Make the .NET 9 sample reproducible from a fresh clone and make its behavior mat
 
 The work spans two repositories:
 
-- `/Users/federicoscamuzzi/Documents/_mio/chat-memory-llm-dotnet-mongodb`
-- `/Users/federicoscamuzzi/Documents/_mio/coolsolution-blog`
+- `chat-memory-llm-dotnet-mongodb`
+- `coolsolution-blog`
 
 All changes remain uncommitted. No deployment, push, production mutation, or history rewrite is in scope.
 
