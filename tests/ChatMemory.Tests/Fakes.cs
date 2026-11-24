@@ -11,9 +11,13 @@ namespace ChatMemory.Tests;
 public sealed class FakeChatClient(string answer = "ok") : IChatClient
 {
     private readonly List<IReadOnlyList<ChatMessage>> calls = [];
+    private readonly List<ChatOptions?> receivedOptions = [];
 
     // Optional script for answer calls. Throw from it to simulate a model failure.
     public Func<IReadOnlyList<ChatMessage>, string>? OnAnswer { get; set; }
+
+    // The options of every call, in call order. Null when the caller sent none.
+    public IReadOnlyList<ChatOptions?> ReceivedOptions => receivedOptions;
 
     // The prompts of the answer calls, in call order.
     public IReadOnlyList<IReadOnlyList<ChatMessage>> AnswerCalls => calls.Where(c => !IsSummaryCall(c)).ToList();
@@ -28,6 +32,7 @@ public sealed class FakeChatClient(string answer = "ok") : IChatClient
         cancellationToken.ThrowIfCancellationRequested();
         IReadOnlyList<ChatMessage> received = messages.ToList();
         calls.Add(received);
+        receivedOptions.Add(options);
 
         var text = IsSummaryCall(received)
             ? $"SUMMARY {SummaryCalls.Count}"

@@ -7,9 +7,15 @@ namespace ChatMemory.Api.Services;
 // templates (llama3.2 in Ollama) render system text at the top and leave the last assistant
 // message open: the model then continues that old answer instead of writing a summary.
 // A final user message is the shape every model answers.
+// The summary is also requested at temperature 0: the same history gives the same summary,
+// and a small model drops fewer facts. Answer requests keep their own options.
 public sealed class SummaryRequestChatClient(IChatClient innerClient) : DelegatingChatClient(innerClient)
 {
-    // Send a trailing system instruction as the final user message; forward every other request as it is.
+    // The temperature of a summary request.
+    public const float SummaryTemperature = 0f;
+
+    // Send a trailing system instruction as the final user message, at temperature 0;
+    // forward every other request as it is.
     public override Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -20,6 +26,10 @@ public sealed class SummaryRequestChatClient(IChatClient innerClient) : Delegati
 
         // 2) Same texts in the same order; the caller's list is left untouched.
         List<ChatMessage> reshaped = [.. received.SkipLast(1), new ChatMessage(ChatRole.User, received[^1].Text)];
-        return base.GetResponseAsync(reshaped, options, cancellationToken);
+
+        // 3) Temperature 0 on a copy of the options, so the caller's object keeps its values.
+        var summaryOptions = options?.Clone() ?? new ChatOptions();
+        summaryOptions.Temperature = SummaryTemperature;
+        return base.GetResponseAsync(reshaped, summaryOptions, cancellationToken);
     }
 }

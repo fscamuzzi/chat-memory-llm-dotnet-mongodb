@@ -231,39 +231,39 @@ last assistant message open, so the model continues that old answer. In 20 runs 
 the same request the reply started with the word `assistant` every time, and it kept
 3.5 of 8 test facts on average.
 
-Two things fix it:
+Three things fix it:
 
 - `SummaryRequestChatClient` wraps the chat client that the reducer uses and sends
   the instruction as the final user message.
 - `ConversationMemoryReducer.SummaryRules` adds two lines to the official prompt:
   keep every name, date, time, number and place, and write only the summary.
+- The summary is requested at temperature 0. When the request carries a previous
+  summary, the official limit of five sentences becomes ten (`SummarySentenceLimit`).
 
-With this shape, 20 runs of the same request kept all 8 facts. The numbers come from
-one English test conversation with `llama3.2` (3B). The summary is still a model
-output: read `promptPreview` when the answers get worse.
+With the first two, 20 runs of the same request kept all 8 facts.
 
-Other settings in the `ChatMemory` section:
+The third one is for the next summaries. A later summary is built from the
+previous summary plus the new turns, and five sentences cannot hold all of it:
+the model drops old facts. The first summary keeps the official limit on purpose.
+With ten sentences it grows from about 90 to about 135 words, mostly with details
+of the answers, and the next summary then drops new facts to make room.
 
-| Setting                  | Default | Rule |
-| ------------------------ | ------- | ---- |
-| `TargetMessageCount`     | 10      | greater than 0 |
-| `SummarizationThreshold` | 5       | at least 1 for `Summarizing`, at least 0 otherwise |
-| `MaxInputCharacters`     | 4000    | greater than 0 |
-| `MaxTitleCharacters`     | 120     | greater than 0 |
-| `MaxConcurrencyRetries`  | 1       | 0 to 3 |
-| `SystemPrompt`           | (text)  | not blank |
+Measured on four test conversations with 8 old and 6 new facts each. Both
+summaries were generated one after the other, as the API does, in 16 chains per row:
 
-Settings in the `Ollama` section:
+| Sentence limit | Old facts after the second summary | New facts | All 14 facts |
+| -------------- | ---------------------------------- | --------- | ------------ |
+| Five for every summary | 86% | 94% | 89% |
+| Ten for every summary | 96% | 90% | 93% |
+| Five for the first, ten for the later ones | 94% | 99% | 96% |
 
-| Setting          | Default                  | Rule |
-| ---------------- | ------------------------ | ---- |
-| `Endpoint`       | `http://localhost:11434` | none |
-| `Model`          | `llama3.2:3b`            | none |
-| `TimeoutSeconds` | 100                      | 1 to 3600 |
+All three rows use temperature 0 or 0.2. The cost of the chosen row: the second
+summary grows from about 109 to about 158 words.
 
-`TimeoutSeconds` is the longest wait for one model call, an answer or a summary.
-
-An invalid value stops the API at startup.
+Two limits remain. The numbers come from English test conversations with
+`llama3.2` (3B), and the third summary was not measured. A fixed limit only moves
+the point where facts are lost: a summary is lossy by design, so read
+`promptPreview` when the answers get worse, and keep exact facts in a separate store.
 
 ## Errors
 

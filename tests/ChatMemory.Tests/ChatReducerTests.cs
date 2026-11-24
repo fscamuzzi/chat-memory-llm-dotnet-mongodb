@@ -218,6 +218,64 @@ public class ChatReducerTests
     }
 
     [Fact]
+    public void OfficialSummarizationPrompt_StillContainsTheSentenceLimitThatTheReducerReplaces()
+    {
+        // The reducer replaces this phrase. If a library update changes the official prompt,
+        // this test fails first and names the cause.
+        var official = new SummarizingChatReducer(new FakeChatClient(), 10, 5).SummarizationPrompt;
+
+        Assert.Contains(ConversationMemoryReducer.OfficialSentenceLimit, official);
+    }
+
+    [Fact]
+    public async Task Summarizing_FirstSummary_KeepsTheOfficialFiveSentenceLimit()
+    {
+        var (repository, id) = await SeedAsync(turns: 8);
+        var chatClient = new FakeChatClient();
+        var reducer = BuildReducer(chatClient, repository, new());
+
+        await ReduceAsync(reducer, repository, id, "Question 9");
+
+        // A longer first summary fills with details and leaves less room for the next one.
+        var instruction = Assert.Single(chatClient.SummaryCalls)[^1].Text;
+        Assert.Equal("no more than five sentences", ConversationMemoryReducer.OfficialSentenceLimit);
+        Assert.Contains(ConversationMemoryReducer.OfficialSentenceLimit, instruction);
+        Assert.DoesNotContain(ConversationMemoryReducer.SummarySentenceLimit, instruction);
+    }
+
+    [Fact]
+    public async Task Summarizing_LaterSummary_AsksForTenSentencesInsteadOfFive()
+    {
+        // A stored checkpoint means this request folds a previous summary into the new one.
+        var checkpoint = new ReducerCheckpoint { SummaryText = "Stored summary", SummarizedThroughSequence = 3 };
+        var (repository, id) = await SeedAsync(turns: 11, checkpoint);
+        var chatClient = new FakeChatClient();
+        var reducer = BuildReducer(chatClient, repository, new());
+
+        await ReduceAsync(reducer, repository, id, "Question 12");
+
+        // Five sentences cannot hold the facts of the previous summary plus the new turns.
+        var instruction = Assert.Single(chatClient.SummaryCalls)[^1].Text;
+        Assert.Equal("no more than ten sentences", ConversationMemoryReducer.SummarySentenceLimit);
+        Assert.Contains(ConversationMemoryReducer.SummarySentenceLimit, instruction);
+        Assert.DoesNotContain("five sentences", instruction);
+    }
+
+    [Fact]
+    public async Task Summarizing_SummaryRequest_UsesTemperatureZero_AndTheAnswerDoesNot()
+    {
+        var (repository, id) = await SeedAsync(turns: 8);
+        var chatClient = new FakeChatClient();
+        var reducer = BuildReducer(chatClient, repository, new());
+
+        await ReduceAsync(reducer, repository, id, "Question 9");
+
+        // The reducer made one model call here: the summary call.
+        Assert.Single(chatClient.SummaryCalls);
+        Assert.Equal(0f, Assert.Single(chatClient.ReceivedOptions)?.Temperature);
+    }
+
+    [Fact]
     public async Task Summarizing_WithCheckpoint_RefreshesOnlyWhenTheTailExceedsTargetPlusThreshold()
     {
         var checkpoint = new ReducerCheckpoint { SummaryText = "Stored summary", SummarizedThroughSequence = 3 };

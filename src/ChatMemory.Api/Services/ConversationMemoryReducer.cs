@@ -27,6 +27,13 @@ public sealed class ConversationMemoryReducer(
         "Keep every name, date, time, number and place that the user gave.\n" +
         "Write only the summary. Do not continue the conversation and do not ask questions.";
 
+    // The length limit in the official summarization prompt, and the limit used when the request
+    // carries a previous summary. Five sentences cannot hold the facts of an earlier summary plus the
+    // new turns: old facts get dropped. The first summary keeps the official limit: a longer first
+    // summary fills with details of the answers and leaves less room for the next one.
+    public const string OfficialSentenceLimit = "no more than five sentences";
+    public const string SummarySentenceLimit = "no more than ten sentences";
+
     private const string PreviousSummaryPrefix = "Previous summary: ";
 
     // The summarization model receives the instruction as a final user message.
@@ -96,7 +103,9 @@ public sealed class ConversationMemoryReducer(
         List<ChatMessage> input = [system, .. previousSummary, .. tail.Select(m => m.Message)];
         var reducer = new SummarizingChatReducer(
             summaryClient, options.Value.TargetMessageCount, options.Value.SummarizationThreshold);
-        reducer.SummarizationPrompt += "\n\n" + SummaryRules;
+        var sentenceLimit = checkpoint is null ? OfficialSentenceLimit : SummarySentenceLimit;
+        reducer.SummarizationPrompt =
+            reducer.SummarizationPrompt.Replace(OfficialSentenceLimit, sentenceLimit) + "\n\n" + SummaryRules;
         var reduced = (await reducer.ReduceAsync(input, ct)).ToList();
 
         // 4) The summary is the only output message that was not in the input.
